@@ -16,21 +16,27 @@ class Ingredient_measurements(object):
             except EOFError:
                 Ingredient_measurements.conversions = {}
 
-
     # The name of the ingredient to add should be a string, passed as ingredient.
     def addIngredient(self):
-        ingredient = input('Ingredient name: ').lower()
-        if ingredient in Ingredient_measurements.conversions.keys():
-            print('Already in dictionary.')
-        else:
-            Ingredient_measurements.conversions[ingredient] = {}
-            print('Added.')
-
+        try:
+            ingName = input('Ingredient name: ').lower()
+            if ingName in Ingredient_measurements.conversions.keys():
+                print('Already in dictionary.')
+            elif ingName == '':
+                print('Invalid input.')
+            else:
+                Ingredient_measurements.conversions[ingName] = {}
+                print('Added.')
+        except:
+            print('Invalid input.')
 
     def removeIngredient(self):
-        del Ingredient_measurements.conversions[
-            input('Ingredient name: ').lower()]
-        print('Deleted.')
+        ingName = Ingredient_measurements.normalize(self, input('Ingredient name: '))
+        try:
+            del Ingredient_measurements.conversions[ingName]
+            print('Deleted.')
+        except:
+            print('Invalid input.')
 
     def save(self):
         # Uses pickle to store dictionary as a file.
@@ -49,14 +55,19 @@ class Ingredient_measurements(object):
                         Ingredient_measurements.conversionsFile)
         print('Saved.')
         Ingredient_measurements.printIng(self, ing)
-        
+    
+    # Prints a specific ingredient given its name
     def printIng(self, ingKey):
-        print(ingKey)
-        for unitKey in sorted(Ingredient_measurements.conversions[ingKey].keys()):
-            print('{:3}{:11}{:1}{:3}'.format(
-                ' ', unitKey, ': ', int(round(
-                    Ingredient_measurements.conversions[ingKey][unitKey]))))
+        try:
+            print(ingKey)
+            for unitKey in sorted(Ingredient_measurements.conversions[ingKey].keys()):
+                print('{:3}{:11}{:1}{:3}'.format(
+                    ' ', unitKey, ': ', int(round(
+                        Ingredient_measurements.conversions[ingKey][unitKey]))))
+        except:
+            print('Invalid input. Please go back.')
 
+    # Prints the entire dictionary
     def print(self):
         print('Unit conversion dictionary;')
         print('Volumetric measurement on left, grams on right.\n')
@@ -71,22 +82,28 @@ class Ingredient_measurements(object):
             'tablespoon': ['tbsp', 'tablespoons'],
             'teaspoon': ['tsp', 'teaspoons'],
             'cup': ['cups'],
+            'sugar' : ['sugar']
             }
         for key in equivalencies.keys():
             if input in equivalencies[key]:
                 input = key
         return input
 
+    # Appends the dictionary with a new unit, or replaces an existing one
     def addReplaceUnit(self, ingredient):
-        unitKey = Ingredient_measurements.normalize(self, 
-                                                    input('Name of unit: '))
-        print('Grams of', ingredient, 'per', unitKey, end = ': ')
-        unitValue = float(input())
-        Ingredient_measurements.conversions[ingredient][unitKey] = unitValue
-        print('Added and saved.')
-        Ingredient_measurements.autofill(self, ingredient, unitKey, unitValue)
-        Ingredient_measurements.saveIng(self, ingredient)
-
+        try:
+            unitKey = Ingredient_measurements.normalize(self, 
+                                                        input('Name of unit: '))
+            print('Grams of', ingredient, 'per', unitKey, end = ': ')
+            unitValue = float(input())
+            Ingredient_measurements.conversions[ingredient][unitKey] = unitValue
+            print('Added and saved.')
+            Ingredient_measurements.autofill(self, ingredient, unitKey, unitValue)
+            Ingredient_measurements.saveIng(self, ingredient)
+        except:
+            print('Invalid input.')
+    
+    # Fills in cups, tablespoons, teaspoons given one of them.
     def autofill(self, ingredient, unitKey, unitValue):
         autofilled = False
         if unitKey == 'cup':
