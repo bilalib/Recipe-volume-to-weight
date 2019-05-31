@@ -55,10 +55,7 @@ class Menus(object):
         Menus.addB.pack() 
         Menus.removeB.pack()
         Menus.ingredientB.pack()
-        Menus.saveB.pack()
         Menus.win.mainloop()
-        print('Invalid input.\n')
-        Menus.conversionsMenu(self)
 
     def ingredientMenu(self):
         Menus.clear(self)
