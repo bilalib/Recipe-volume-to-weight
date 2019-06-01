@@ -1,8 +1,13 @@
 from Menus import *
 from Recipe import *
 
-recipe = Recipe()
-link = 'https://www.allrecipes.com/recipe/23431/to-die-for-fettuccine-alfredo/?internalSource=previously%20viewed&referringContentType=Homepage'
-ingredients = recipe.getIngList(link)
-ingredients = recipe.parseIngList(ingredients)
-print(ingredients)
+
+
+
+
+
+link = 'https://www.allrecipes.com/recipe/16822/cake-mix-cinnamon-rolls/?internalSource=previously%20viewed&referringContentType=Homepage'
+recipe = Recipe.fromLink(link)
+print(recipe.ingredients, '\n\n')
+recipe.convert()
+print(recipe.ingredients)
