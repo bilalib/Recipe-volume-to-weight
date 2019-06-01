@@ -28,6 +28,9 @@
     <Compile Include="Menus.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Recipe.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Recipe_volume_to_weight.py" />
   </ItemGroup>
   <ItemGroup>
