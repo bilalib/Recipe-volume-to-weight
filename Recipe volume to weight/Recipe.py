@@ -1,11 +1,10 @@
 import requests
 from lxml import html
-from Ingredient_measurements import *
 import openpyxl
+import io
 
 
 class Recipe(object):
-    conversions = Ingredient_measurements()
 
     def __init__(self, ingredients):
         Recipe.ingredients = ingredients
@@ -43,7 +42,7 @@ class Recipe(object):
                     ing[0] = float(ing[0])
                 Recipe.ingredients[i] = ing
 
-    def convert(self):
+    def volToGrams(self):
         book = openpyxl.load_workbook('conversions.xlsx', data_only = True)
 
         sheetCols =  {
@@ -69,7 +68,7 @@ class Recipe(object):
                         item = row[0].value
             return item
 
-        def volToGram(amount, unit, ingredient):
+        def convert(amount, unit, ingredient):
             if unit not in sheetCols.keys():
                 return -1
 
@@ -83,12 +82,19 @@ class Recipe(object):
             for cell in sheet['P']:
                 if ingredient == cell.value:
                     ratio = sheet[sheetCols[unit]][cell.row - 1].value
-                    return int(round(amount * ratio))
+                    return int(amount * ratio)
 
             return -1
 
         for i, ing in enumerate(Recipe.ingredients):
             if len(ing) >= 3:
-                grams = volToGram(ing[0], ing[1], ing[2])
+                grams = convert(ing[0], ing[1], ing[2])
                 if grams > 0: 
                     Recipe.ingredients[i][0] = grams
+                    Recipe.ingredients[i][1] = 'grams'
+
+    def prettify(self):
+        with io.StringIO() as buffer:   
+            for i ,ing in enumerate(Recipe.ingredients):
+                buffer.write(' '.join(map(str, ing)) + '\n')
+            return buffer.getvalue()
