@@ -75,9 +75,9 @@ class Recipe(object):
 
             # Normalizes passed information and opens sheet
             unit = normalize(unit)
+            ingredient = normalize(ingredient)
             book.active = 0
             sheet = book.active
-            ingredient = normalize(ingredient)
 
             # Iterates thru sheet looking for given ingredient
             for cell in sheet['P']:
