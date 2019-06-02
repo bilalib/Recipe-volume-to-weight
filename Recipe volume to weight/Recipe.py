@@ -7,19 +7,25 @@ from fractions import Fraction
 class Recipe(object):
 
     def __init__(self, ingredients):
-        Recipe.ingredients = ingredients
-        Recipe.parseIngList(self)
-        Recipe.selection = list()
+        self.ingredients = ingredients
+        self.parseIngList()
+        self.selection = list()
 
     @classmethod
-    def fromLink(self, link):
-        return self(Recipe.ingsFromLink(self, link))
+    def fromLink(cls, link):
 
-    # Scrapes the Allrecipes link, getting the list of ingredients
-    def ingsFromLink(self, link):
-        with requests.get(link) as page:    
-            tree = html.fromstring(page.content)
-        return tree.xpath('//*[@id="lst_ingredients_1"]/li/label/span/text()')
+        # Scrapes the Allrecipes link, getting the list of ingredients
+        def ingsFromLink(link):
+            with requests.get(link) as page:    
+                tree = html.fromstring(page.content)
+            return tree.xpath('//*[@id="lst_ingredients_1"]/li/label/span/text()')
+
+        return cls(ingsFromLink(link))
+
+    @classmethod
+    def fromString(cls, recipeString):
+        recipeList = recipeString.split('\n')
+        return cls(recipeList)
 
     def parseIngList(self):
 
@@ -30,8 +36,12 @@ class Recipe(object):
             else:
                 return frac
         
-        for i, ing in enumerate(Recipe.ingredients):
-            # Splits ing such that number is seperate from unit and name
+        for i, ing in enumerate(self.ingredients):
+            # If the ingredient is just one word like 'salt', nothing to parse.
+            if len(ing) <= 1:
+                continue
+
+            # Splits ingredient so that amount, unit, and name are seperated
             splitAmount = 1
             for char in ing:
                 if char.isalpha():
@@ -40,33 +50,29 @@ class Recipe(object):
                     splitAmount += 1
             ing = ing.split(' ', splitAmount)
 
-            if len(ing) > 1:
-                # If first or second elts are fractions, 
-                # tries to evaluate to a float
-                ing[0] = fracToFloat(ing[0])
-                ing[1] = fracToFloat(ing[1])
-                # Converts mixed numbers (e.x. 1 1/4) to one float (e.x. 1.25)
-                try:
-                    ing[0] = float(ing[0]) + float(ing[1])
-                    del ing[1]
-                except ValueError:
-                    ing[0] = float(ing[0])
+            # If first or second elts are fractions, converts them to float
+            ing[0] = fracToFloat(ing[0])
+            ing[1] = fracToFloat(ing[1])
+            # Converts mixed numbers (e.x. 1 1/4) to one float (e.x. 1.25)
+            try:
+                ing[0] = float(ing[0]) + float(ing[1])
+                del ing[1]
+            except ValueError:
+                ing[0] = float(ing[0])
 
-            Recipe.ingredients[i] = ing
+            self.ingredients[i] = ing
 
     def volToGrams(self):
         book = openpyxl.load_workbook('conversions.xlsx', data_only = True)
 
         # Maps ingredient names to its column of the spreadsheet
         sheetCols =  {
-        # 'teaspoons' : 'U',
-        # 'tablespoons' : 'V',
-        # 'oz' : 'X',
-        'cups' : 'Y',
+        # 'teaspoons' : 'U', 'tablespoons' : 'V', 'oz' : 'X',
+        'cups' : 'Y'
         }
 
         def normalize(item):
-            # Handles situations where case matters
+            # Handles the conflict where letter case matters
             if item == 'T':
                 return 'tablespoons'
             if item == 't':
@@ -75,10 +81,10 @@ class Recipe(object):
             item = item.lower()
             book.active = 1
             sheet = book.active
-            for row in sheet.iter_rows():
+            for row in sheet.iter_rows(values_only = True):
                 for cell in row:
-                    if item == cell.value:
-                        item = row[0].value
+                    if item == cell:
+                        item = row[0]
             return item
 
         def convert(amount, unit, ingredient):
@@ -101,28 +107,27 @@ class Recipe(object):
             return -1
 
         # Tries to convert each ingredient in ingredients
-        for i, ing in enumerate(Recipe.ingredients):
-            if len(ing) >= 3 and Recipe.inSelection(self, ing[2]):
+        for i, ing in enumerate(self.ingredients):
+            if len(ing) >= 3 and self.inSelection(ing[2]):
                 grams = convert(ing[0], ing[1], ing[2])
                 if grams > 0: 
-                    Recipe.ingredients[i][0] = grams
-                    Recipe.ingredients[i][1] = 'grams'
+                    self.ingredients[i][0] = grams
+                    self.ingredients[i][1] = 'grams'
 
     # Outputs the ingredient list in a readable format
     def prettify(self):
         # Creates stringIO to write each ingredient.
         # Goes through the amount of each ingredient first.
         with io.StringIO() as buffer:   
-            for i, ing in enumerate(Recipe.ingredients):
+            for i, ing in enumerate(self.ingredients):
                 amount = ing[0]
                 amountToBuffer = str(amount)
-                # Converts amounts between 0 and 1 to fractions
+                # Converts amounts between 0 and 1 to fractions. Ex. .25 -> 1/4
                 if amount < 1 and ing[1] != 'grams':
                     frac = str(Fraction(amount).limit_denominator())
                     if len(frac) <= 4:
                         amountToBuffer = frac
-                # Converts floats representing ints 
-                # (e.x. 1.0, 3.0) to int (e.x. 1, 3)
+                # Converts floats representing ints to ints. Ex. 3.0 -> 3
                 elif type(amount) == float:
                     if amount.is_integer():
                         amountToBuffer = str(int(amount))
@@ -134,8 +139,8 @@ class Recipe(object):
     
     # Use to determine if user wants to convert the ingredient
     def inSelection(self, ing):
-        if not Recipe.selection:
+        if not self.selection:
             return True
-        if ing in Recipe.selection:
+        if ing in self.selection:
             return True
         return False
