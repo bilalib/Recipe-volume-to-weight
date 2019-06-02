@@ -4,12 +4,12 @@ import openpyxl
 import io
 from fractions import Fraction
 
-
 class Recipe(object):
 
     def __init__(self, ingredients):
         Recipe.ingredients = ingredients
         Recipe.parseIngList(self)
+        Recipe.selection = list()
 
     @classmethod
     def fromLink(self, link):
@@ -25,8 +25,8 @@ class Recipe(object):
 
         def fracToFloat(frac):
             if '/' in frac:
-                frac = frac.split('/')
-                return float(frac[0]) / float(frac[1])
+                frac = list(map(float, frac.split('/')))
+                return frac[0] / frac[1]
             else:
                 return frac
         
@@ -41,18 +41,21 @@ class Recipe(object):
             ing = ing.split(' ', splitAmount)
 
             if len(ing) > 1:
-                # If first or second elts are fractions, tries to evaluate to a float
+                # If first or second elts are fractions, 
+                # tries to evaluate to a float
                 ing[0] = fracToFloat(ing[0])
                 ing[1] = fracToFloat(ing[1])
-                # If first or second elts are fractions, adds them.
+                # Converts mixed numbers (i.e. 1 1/4) to one float (i.e. 1.25)
                 try:
                     ing[0] = float(ing[0]) + float(ing[1])
                     del ing[1]
                 except ValueError:
                     ing[0] = float(ing[0])
+
             Recipe.ingredients[i] = ing
 
     def volToGrams(self):
+
         book = openpyxl.load_workbook('conversions.xlsx', data_only = True)
 
         # Maps ingredient names to its column of the spreadsheet
@@ -100,7 +103,7 @@ class Recipe(object):
 
         # Tries to convert each ingredient in ingredients
         for i, ing in enumerate(Recipe.ingredients):
-            if len(ing) >= 3:
+            if len(ing) >= 3 and Recipe.inSelection(self, ing[2]):
                 grams = convert(ing[0], ing[1], ing[2])
                 if grams > 0: 
                     Recipe.ingredients[i][0] = grams
@@ -108,26 +111,32 @@ class Recipe(object):
 
     # Outputs the ingredient list in a readable format
     def prettify(self):
-        # Creates stringIO to write each ingredient and first goes through 
-        # the amount of each ingredient
+        # Creates stringIO to write each ingredient.
+        # Goes through the amount of each ingredient first.
         with io.StringIO() as buffer:   
             for i, ing in enumerate(Recipe.ingredients):
                 amount = ing[0]
+                amountToBuffer = str(amount)
                 # Converts amounts between 0 and 1 to fractions
                 if amount < 1:
                     frac = str(Fraction(amount).limit_denominator())
                     if len(frac) <= 3:
-                        buffer.write(frac)
-                    else:
-                        buffer.write(str(amount))
-                # Converts floats representing ints (like 1.0, 3.0) to int
+                        amountToBuffer = frac
+                # Converts floats representing ints 
+                # (like 1.0, 3.0) to int (1, 3)
                 elif type(amount) == float:
                     if amount.is_integer():
-                        buffer.write(str(int(amount)))
-                    else:
-                        buffer.write(str(amount))
-                else:
-                    buffer.write(str(amount))
+                        amountToBuffer = str(int(amount))
+
                 # Writes the ingredient unit and name
-                buffer.write(' ' + ' '.join(map(str, ing[1:])) + '\n')
+                buffer.write(amountToBuffer + ' ' + ' '.join(
+                    map(str, ing[1:])) + '\n')
             return buffer.getvalue()
+    
+    # Use to determine if user wants to convert the ingredient
+    def inSelection(self, ing):
+        if not Recipe.selection:
+            return True
+        if ing in Recipe.selection:
+            return True
+        return False
