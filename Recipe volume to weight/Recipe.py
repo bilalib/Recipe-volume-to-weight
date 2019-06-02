@@ -34,7 +34,7 @@ class Recipe(object):
             # Splits ing such that number is seperate from unit and name
             splitAmount = 1
             for char in ing:
-                if not (char.isdigit() or char == '/' or char == ' '):
+                if char.isalpha():
                     break
                 if char == ' ':
                     splitAmount += 1
@@ -45,7 +45,7 @@ class Recipe(object):
                 # tries to evaluate to a float
                 ing[0] = fracToFloat(ing[0])
                 ing[1] = fracToFloat(ing[1])
-                # Converts mixed numbers (i.e. 1 1/4) to one float (i.e. 1.25)
+                # Converts mixed numbers (e.x. 1 1/4) to one float (e.x. 1.25)
                 try:
                     ing[0] = float(ing[0]) + float(ing[1])
                     del ing[1]
@@ -55,7 +55,6 @@ class Recipe(object):
             Recipe.ingredients[i] = ing
 
     def volToGrams(self):
-
         book = openpyxl.load_workbook('conversions.xlsx', data_only = True)
 
         # Maps ingredient names to its column of the spreadsheet
@@ -118,12 +117,12 @@ class Recipe(object):
                 amount = ing[0]
                 amountToBuffer = str(amount)
                 # Converts amounts between 0 and 1 to fractions
-                if amount < 1:
+                if amount < 1 and ing[1] != 'grams':
                     frac = str(Fraction(amount).limit_denominator())
-                    if len(frac) <= 3:
+                    if len(frac) <= 4:
                         amountToBuffer = frac
                 # Converts floats representing ints 
-                # (like 1.0, 3.0) to int (1, 3)
+                # (e.x. 1.0, 3.0) to int (e.x. 1, 3)
                 elif type(amount) == float:
                     if amount.is_integer():
                         amountToBuffer = str(int(amount))
