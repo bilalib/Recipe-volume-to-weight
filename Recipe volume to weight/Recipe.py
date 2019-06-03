@@ -4,55 +4,54 @@ import openpyxl
 import io
 from fractions import Fraction
 
-class Recipe(object):
 
+class Recipe(object):
     def __init__(self, ingredients):
         self.ingredients = ingredients
-        self.parseIngList()
+        self.parse_ing_list()
         self.selection = list()
 
     @classmethod
-    def fromLink(cls, link):
+    def from_link(cls, link):
 
         # Scrapes the Allrecipes link, getting the list of ingredients
-        def ingsFromLink(link):
-            with requests.get(link) as page:    
+        def ings_from_link(link):
+            with requests.get(link) as page:
                 tree = html.fromstring(page.content)
             return tree.xpath('//*[@id="lst_ingredients_1"]/li/label/span/text()')
 
-        return cls(ingsFromLink(link))
+        return cls(ings_from_link(link))
 
     @classmethod
-    def fromString(cls, recipeString):
-        recipeList = recipeString.split('\n')
+    def from_string(cls, recipeString):
+        recipeList = recipeString.split("\n")
         return cls(recipeList)
 
-    def parseIngList(self):
-
-        def fracToFloat(frac):
-            if '/' in frac:
-                frac = list(map(float, frac.split('/')))
+    def parse_ing_list(self):
+        def frac_to_float(frac):
+            if "/" in frac:
+                frac = list(map(float, frac.split("/")))
                 return frac[0] / frac[1]
             else:
                 return frac
-        
+
         for i, ing in enumerate(self.ingredients):
             # If the ingredient is just one word like 'salt', nothing to parse.
             if len(ing) <= 1:
                 continue
 
             # Splits ingredient so that amount, unit, and name are seperated
-            splitAmount = 1
+            split_amount = 1
             for char in ing:
                 if char.isalpha():
                     break
-                if char == ' ':
-                    splitAmount += 1
-            ing = ing.split(' ', splitAmount)
+                if char == " ":
+                    split_amount += 1
+            ing = ing.split(" ", split_amount)
 
             # If first or second elts are fractions, converts them to float
-            ing[0] = fracToFloat(ing[0])
-            ing[1] = fracToFloat(ing[1])
+            ing[0] = frac_to_float(ing[0])
+            ing[1] = frac_to_float(ing[1])
             # Converts mixed numbers (e.x. 1 1/4) to one float (e.x. 1.25)
             try:
                 ing[0] = float(ing[0]) + float(ing[1])
@@ -62,26 +61,20 @@ class Recipe(object):
 
             self.ingredients[i] = ing
 
-    def volToGrams(self):
-        book = openpyxl.load_workbook('conversions.xlsx', data_only = True)
-
-        # Maps ingredient names to its column of the spreadsheet
-        sheetCols =  {
-        # 'teaspoons' : 'U', 'tablespoons' : 'V', 'oz' : 'X',
-        'cups' : 'Y'
-        }
+    def vol_to_grams(self):
+        book = openpyxl.load_workbook("conversions.xlsx", data_only=True)
 
         def normalize(item):
             # Handles the conflict where letter case matters
-            if item == 'T':
-                return 'tablespoons'
-            if item == 't':
-                return 'teaspoons'
+            if item == "T":
+                return "tablespoons"
+            if item == "t":
+                return "teaspoons"
             # Converts item to lowercase and tries to find it in spreadsheet
             item = item.lower()
             book.active = 1
             sheet = book.active
-            for row in sheet.iter_rows(values_only = True):
+            for row in sheet.iter_rows(values_only=True):
                 for cell in row:
                     if item == cell:
                         item = row[0]
@@ -95,52 +88,58 @@ class Recipe(object):
             sheet = book.active
 
             # Checks if the unit of measurement is known
-            if unit not in sheetCols.keys():
+            # Maps ingredient names to its column of the spreadsheet
+            sheet_cols = {
+                # 'teaspoons' : 'U', 'tablespoons' : 'V', 'oz' : 'X',
+                "cups": "Y"
+            }
+            if unit not in sheet_cols.keys():
                 return -1
 
             # Iterates through sheet looking for given ingredient
-            for cell in sheet['P']:
+            for cell in sheet["P"]:
                 if ingredient == cell.value:
                     # Converts the ingredient if it is found
-                    ratio = sheet[sheetCols[unit]][cell.row - 1].value
+                    ratio = sheet[sheet_cols[unit]][cell.row - 1].value
                     return int(amount * ratio)
             return -1
 
+        # Use to determine if user wants to convert the ingredient
+        def in_selection(ing):
+            if not self.selection:
+                return True
+            if ing in self.selection:
+                return True
+            return False
+
         # Tries to convert each ingredient in ingredients
         for i, ing in enumerate(self.ingredients):
-            if len(ing) >= 3 and self.inSelection(ing[2]):
+            if len(ing) >= 3 and in_selection(ing[2]):
                 grams = convert(ing[0], ing[1], ing[2])
-                if grams > 0: 
+                if grams > 0:
                     self.ingredients[i][0] = grams
-                    self.ingredients[i][1] = 'grams'
+                    self.ingredients[i][1] = "grams"
 
     # Outputs the ingredient list in a readable format
     def prettify(self):
         # Creates stringIO to write each ingredient.
         # Goes through the amount of each ingredient first.
-        with io.StringIO() as buffer:   
+        with io.StringIO() as buffer:
             for i, ing in enumerate(self.ingredients):
                 amount = ing[0]
-                amountToBuffer = str(amount)
+                amount_to_buffer = str(amount)
                 # Converts amounts between 0 and 1 to fractions. Ex. .25 -> 1/4
-                if amount < 1 and ing[1] != 'grams':
+                if amount < 1 and ing[1] != "grams":
                     frac = str(Fraction(amount).limit_denominator())
                     if len(frac) <= 4:
-                        amountToBuffer = frac
+                        amount_to_buffer = frac
                 # Converts floats representing ints to ints. Ex. 3.0 -> 3
                 elif type(amount) == float:
                     if amount.is_integer():
-                        amountToBuffer = str(int(amount))
+                        amount_to_buffer = str(int(amount))
 
                 # Writes the ingredient unit and name
-                buffer.write(amountToBuffer + ' ' + ' '.join(
-                    map(str, ing[1:])) + '\n')
+                buffer.write(amount_to_buffer + " " + " ".join(map(str, ing[1:])) + "\n")
             return buffer.getvalue()
+
     
-    # Use to determine if user wants to convert the ingredient
-    def inSelection(self, ing):
-        if not self.selection:
-            return True
-        if ing in self.selection:
-            return True
-        return False
