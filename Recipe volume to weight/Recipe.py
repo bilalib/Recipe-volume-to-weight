@@ -3,22 +3,24 @@ from lxml import html
 import openpyxl
 import io
 from fractions import Fraction
+import copy
 
 
 class Recipe(object):
     def __init__(self, ingredients):
-        self.ingredients = ingredients
+        self.ingredients_old = list(ingredients)
+        self.ingredients = list(ingredients)
         self.parse_ing_list()
         self.selection = list()
 
     @classmethod
     def from_link(cls, link):
-
+        path = "//span[@class='recipe-ingred_txt added']/text()"
         # Scrapes the Allrecipes link, getting the list of ingredients
         def ings_from_link(link):
             with requests.get(link) as page:
                 tree = html.fromstring(page.content)
-            return tree.xpath('//*[@id="lst_ingredients_1"]/li/label/span/text()')
+            return tree.xpath(path)
 
         return cls(ings_from_link(link))
 
@@ -35,11 +37,8 @@ class Recipe(object):
             else:
                 return frac
 
-        for i, ing in enumerate(self.ingredients):
-            # If the ingredient is just one word like 'salt', nothing to parse.
-            if len(ing) <= 1:
-                continue
-
+        for i, ing in enumerate(
+            ing for ing in self.ingredients if len(ing) > 1):
             # Splits ingredient so that amount, unit, and name are seperated
             split_amount = 1
             for char in ing:
@@ -87,7 +86,7 @@ class Recipe(object):
             book.active = 0
             sheet = book.active
 
-            # Checks if the unit of measurement is known
+            # Checks if the unit of measurement is known. 
             # Maps ingredient names to its column of the spreadsheet
             sheet_cols = {
                 # 'teaspoons' : 'U', 'tablespoons' : 'V', 'oz' : 'X',
@@ -122,24 +121,12 @@ class Recipe(object):
 
     # Outputs the ingredient list in a readable format
     def prettify(self):
-        # Creates stringIO to write each ingredient.
+        # Creates stringIO to write each ingredient. 
         # Goes through the amount of each ingredient first.
         with io.StringIO() as buffer:
             for i, ing in enumerate(self.ingredients):
-                amount = ing[0]
-                amount_to_buffer = str(amount)
-                # Converts amounts between 0 and 1 to fractions. Ex. .25 -> 1/4
-                if amount < 1 and ing[1] != "grams":
-                    frac = str(Fraction(amount).limit_denominator())
-                    if len(frac) <= 4:
-                        amount_to_buffer = frac
-                # Converts floats representing ints to ints. Ex. 3.0 -> 3
-                elif type(amount) == float:
-                    if amount.is_integer():
-                        amount_to_buffer = str(int(amount))
-
-                # Writes the ingredient unit and name
-                buffer.write(amount_to_buffer + " " + " ".join(map(str, ing[1:])) + "\n")
+                if ing[1] == "grams":
+                    buffer.write(" ".join(map(str, ing)) + "\n")
+                else:
+                    buffer.write(self.ingredients_old[i] + "\n")
             return buffer.getvalue()
-
-    
