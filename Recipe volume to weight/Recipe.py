@@ -2,8 +2,6 @@ import requests
 from lxml import html
 import openpyxl
 import io
-from fractions import Fraction
-import copy
 
 
 class Recipe(object):
