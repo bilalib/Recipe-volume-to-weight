@@ -1,26 +1,19 @@
-import requests
-from lxml import html
 import openpyxl
 import io
-
+from Scraper import *
 
 class Recipe(object):
     def __init__(self, ingredients):
-        self.ingredients_old = list(ingredients)
         self.ingredients = list(ingredients)
         self.parse_ing_list()
-        self.selection = list()
+        self.ingredients_old = tuple(ingredients)
+        self.ingredients_changed = [False] * len(self.ingredients)
+        self.selection = tuple()
 
+    # Scrapes the link, getting the list of ingredients
     @classmethod
     def from_link(cls, link):
-        path = "//span[@class='recipe-ingred_txt added']/text()"
-        # Scrapes the Allrecipes link, getting the list of ingredients
-        def ings_from_link(link):
-            with requests.get(link) as page:
-                tree = html.fromstring(page.content)
-            return tree.xpath(path)
-
-        return cls(ings_from_link(link))
+        return cls(Scraper(link).ings)
 
     @classmethod
     def from_string(cls, recipeString):
@@ -28,34 +21,32 @@ class Recipe(object):
         return cls(recipeList)
 
     def parse_ing_list(self):
-
         def frac_to_float(frac):
             if "/" in frac:
-                frac = [float(x) for x in frac.split("/")]
-                return frac[0] / frac[1]
-            else:
-                return frac
+                frac = tuple(float(x) for x in frac.split("/"))
+                frac = frac[0] / frac[1]
+            return frac
 
-        for i, ing in enumerate(self.ingredients): 
-            if len(ing) > 1:
-                # Splits ingredient so that amount, unit, and name are seperated
-                split_amount = 1
-                for char in ing:
-                    if char.isalpha():
-                        break
-                    if char == " ":
-                        split_amount += 1
-                ing = ing.split(" ", split_amount)
-
+        for i, ing in enumerate(self.ingredients):
+            # Splits ingredient so that amount, unit, and name are seperated
+            split_amount = 1
+            for char in ing:
+                if char.isalpha():
+                    break
+                if char == " ":
+                    split_amount += 1
+            ing = ing.split(" ", split_amount)
             # If first or second elts are fractions, converts them to float
-            ing[0] = frac_to_float(ing[0])
-            ing[1] = frac_to_float(ing[1])
+            ing[:2] = [frac_to_float(x) for x in ing[:2]]
             # Converts mixed numbers (e.x. 1 1/4) to one float (e.x. 1.25)
             try:
-                ing[0] = float(ing[0]) + float(ing[1])
+                ing[0] = sum(float(x) for x in ing[:2])
                 del ing[1]
             except ValueError:
-                ing[0] = float(ing[0])
+                try:
+                    ing[0] = float(ing[0])
+                except:
+                    pass
 
             self.ingredients[i] = ing
 
@@ -117,8 +108,9 @@ class Recipe(object):
             if len(ing) >= 3 and in_selection(ing[2]):
                 grams = convert(ing)
                 if grams > 0:
-                    self.ingredients[i][0] = grams
-                    self.ingredients[i][1] = "grams"
+                    ing[0] = grams
+                    ing[1] = "grams"
+                    self.ingredients_changed[i] = True
 
     # Outputs the ingredient list in a readable format
     def prettify(self):
@@ -126,9 +118,20 @@ class Recipe(object):
         # Goes through the amount of each ingredient first.
         with io.StringIO() as buffer:
             for i, ing in enumerate(self.ingredients):
-                if ing[1] == "grams":
-                    buffer.write(" ".join([str(elt) for elt in ing]))
+                if self.ingredients_changed[i]:
+                    # Makes floats less ugly by converting to int or rounding
+                    if type(ing[0]) == float:
+                        if ing[0].is_integer():
+                            ing[0] = int(ing[0])
+                        else:
+                            ing[0] = round(ing[0], 1)
+                    buffer.write(" ".join([str(x) for x in ing]))
                 else:
                     buffer.write(self.ingredients_old[i])
                 buffer.write("\n")
             return buffer.getvalue()
+
+    def multiply(self, multiplier):
+        for _, ing in enumerate(self.ingredients):
+            ing[0] *= multiplier
+        self.ingredients_changed = [True] * len(self.ingredients)
