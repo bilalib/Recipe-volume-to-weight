@@ -1,20 +1,21 @@
 import openpyxl
 import io
-from Scraper import *
+from Scraper import Scraper
 from fractions import Fraction
 
 class Recipe(object):
+
     def __init__(self, ings):
         self.ings = list(ings)
         self.parse_ing_list()
         self.ings_old = tuple(ings)
-        self.ings_changed = [False] * len(self.ings)
+        self.ing_changed = [False] * len(self.ings)
         self.selected = [False] * len(self.ings)
 
     # Scrapes the link, getting the list of ings
     @classmethod
     def from_link(cls, link):
-        return cls(Scraper(link).ings)
+        return cls(Scraper.auto_scrape(link))
 
     @classmethod
     def from_string(cls, recipe_string):
@@ -70,7 +71,7 @@ class Recipe(object):
         def normalize(item):
             # T and t conflict, so we deal with them before 
             # converting everything to lowercase
-            case_matters = {"T" : "tablespoons", "t": "teaspoons"}
+            case_matters = {"T": "tablespoons", "t": "teaspoons"}
             if item in case_matters.keys():
                 return case_matters[item]
             # Converts item to lowercase and tries to find it in spreadsheet
@@ -84,8 +85,8 @@ class Recipe(object):
                 
         # Returns -1 if ing couldn't be converted
         def convert_ing(ing_idx):
-            ing = self.ings[ing_idx]
 
+            ing = self.ings[ing_idx]
             if len(ing) < 3 or not in_selection(ing_idx):
                return -1
 
@@ -111,7 +112,7 @@ class Recipe(object):
                     if ing_name == cell.value:
                         # Converts the ingredient if it is found
                         ratio = sheet[sheet_cols[unit]][cell.row - 1].value
-                        return amount * ratio
+                        return int(amount * ratio)
             return -1
 
         # Use to determine if user wants to convert the ingredient
@@ -124,32 +125,48 @@ class Recipe(object):
             if grams > 0:
                 ing[0] = grams
                 ing[1] = "grams"
-                self.ings_changed[i] = True
+                self.ing_changed[i] = True
 
     # Outputs the ingredient list in a readable format
-    def prettify(self):
+    def prettify(self, numbered=False):
+
+        # Makes floats less ugly by converting to int or rounding
+        def clean_float(number):
+            if type(number) != float:
+                return str(number)
+            if number.is_integer():
+                return str(int(number))
+
+            whole = int(number)
+            decimal = number - whole
+            frac = str(Fraction(decimal).limit_denominator())
+            if len(frac) <= 4:
+                # .3333... --> 0 1/3 --> 1/3
+                return str(whole) + " " + frac if whole > 0 else frac
+            else:
+                return round(number, 1)
+
+            return number
+
         # Creates stringIO to write each ingredient. 
         # Goes through the amount of each ingredient first.
         with io.StringIO() as buffer:
             for i, ing in enumerate(self.ings):
-                if self.ings_changed[i]:
-                    # Makes floats less ugly by converting to int or rounding
-                    if type(ing[0]) == float:
-                        if ing[0].is_integer():
-                            ing[0] = int(ing[0])
-                        else:
-                            ing[0] = round(ing[0], 1)
-                    buffer.write(" ".join([str(x) for x in ing]))
+                if numbered:
+                    buffer.write(str(i + 1) + ") ")
+                if self.ing_changed[i]:
+                    buffer.write(clean_float(ing[0]) 
+                                 + " " + " ".join([str(x) for x in ing[1:]]))
                 else:
                     buffer.write(self.ings_old[i])
                 buffer.write("\n")
             return buffer.getvalue()
 
     def multiply(self, multiplier):
-        for _, ing in enumerate(self.ings):
+        for i, ing in enumerate(self.ings):
             if type(ing[0]) == int or type(ing[0]) == float:
                 ing[0] *= multiplier
-        self.ings_changed = [True] * len(self.ings)
+                self.ing_changed[i] = True
 
     def select(self, *args):
         self.selected = [False] * len(self.ings)

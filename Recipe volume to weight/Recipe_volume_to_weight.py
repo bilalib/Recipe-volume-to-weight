@@ -1,10 +1,10 @@
 from Recipe import *
 import os
 
+link = "https://www.allrecipes.com/recipe/8265/funnel-cakes-iv/?internalSource=hub%20recipe&referringContentType=Search"
 
-link = "https://www.budgetbytes.com/strawberry-shortcake/"
-
-r = Recipe.from_link(link)
-r.select(3)
+r = Recipe.from_string(recipe_str)
 r.convert_recipe()
+print(r.prettify())
+r.multiply(1/2)
 print(r.prettify())

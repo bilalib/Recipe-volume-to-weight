@@ -1,27 +1,34 @@
 import requests
 from lxml import html
-from lxml import etree
 
 class Scraper(object):
     
-    wprm_sites = {"jocooks", "justonecookbook"}
+    wprm_sites = frozenset({"jocooks", "justonecookbook"})
 
     def __init__(self, link):
         self.ings = list()
         with requests.get(link) as page:
             self.tree = html.fromstring(page.content)
-
+    
+    @staticmethod
+    def auto_scrape(link):
+        scr = Scraper(link)
         # wprm works for all sites that use wordpress recipe maker
         if any(site in link for site in Scraper.wprm_sites):
-            self.wprm()
+            scr.wprm()
         if "allrecipes" in link:
-            self.allrecipes()
+            scr.allrecipes()
         if "martha" in link:
-            self.martha()
+            scr.martha()
         if "smitten" in link:
-            self.smitten()
+            scr.smitten()
         if "budgetbytes" in link:
-            self.budgetbytes()
+            scr.budgetbytes()
+        return scr.ings
+            
+    def get_strip(self, path):
+        ings_elt = self.tree.xpath(path)
+        self.ings = [str(x.text_content()).strip() for x in ings_elt]
 
     def allrecipes(self):
         path = '//span[@class="recipe-ingred_txt added"]/text()'
@@ -29,22 +36,18 @@ class Scraper(object):
 
     def wprm(self):
         path = '//li[contains(@class, "wprm-recipe-ingredient")]'
-        # Removes leading spaces from each ingredient
-        self.ings = [str(x.text_content()).strip() 
-                     for x in self.tree.xpath(path)]
+        self.get_strip(path)
 
     def martha(self):
         path = '//span[@class="component-text"]'
-        self.ings = self.tree.xpath(path)
-        self.ings = [x.text_content().strip() for x in self.ings]
+        self.get_strip(path)
 
     def smitten(self):
-        path = '//p[starts-with(text(), "Makes")]'
-        temp = self.tree.xpath(path)[0].getnext()
-        self.ings = str(temp.text_content()).split("\n")
+        path = '//p[starts-with(text(), "Makes ")]'
+        ings_elt = self.tree.xpath(path)[0].getnext()
+        self.ings = str(ings_elt.text_content()).split("\n")
 
     def budgetbytes(self):
         self.wprm()
         # Removes the cost which messes with parsing
-        for i, ing in enumerate(self.ings):
-            self.ings[i] = ing.rpartition(" ")[0]
+        self.ings = [ing.rpartition(" ")[0] for ing in self.ings]
