@@ -1,5 +1,4 @@
 import openpyxl
-import io
 from Scraper import Scraper
 from fractions import Fraction
 
@@ -15,7 +14,7 @@ class Recipe(object):
     # Scrapes the link, getting the list of ings
     @classmethod
     def from_link(cls, link):
-        return cls(Scraper.auto_scrape(link))
+        return cls(Scraper.auto_scrape_ings(link))
 
     @classmethod
     def from_string(cls, recipe_string):
@@ -82,8 +81,8 @@ class Recipe(object):
                 if type(whole) == str and whole.isdigit():
                     ing[0] = float(whole)
             
-            self.ings[i].update({"amount": float(ing[0]), "unit": 
-                                 normalize(ing[1]), "name": normalize(ing[2])})
+            self.ings[i].update({"amount": ing[0], "unit": normalize(ing[1]),
+                                "name": normalize(ing[2])})
 
     def convert_recipe(self):
 
