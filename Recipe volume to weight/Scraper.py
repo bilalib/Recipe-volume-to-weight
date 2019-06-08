@@ -24,19 +24,21 @@ class Scraper(object):
             scr.smitten()
         if "budgetbytes" in link:
             scr.budgetbytes()
+        if "damndelicious" in link:
+            scr.damndelicious()
         return scr.ings
             
     def get_strip(self, path):
         ings_elt = self.tree.xpath(path)
         self.ings = [str(x.text_content()).strip() for x in ings_elt]
 
-    def allrecipes(self):
-        path = '//span[@class="recipe-ingred_txt added"]/text()'
-        self.ings = self.tree.xpath(path)
-
     def wprm(self):
         path = '//li[contains(@class, "wprm-recipe-ingredient")]'
         self.get_strip(path)
+
+    def allrecipes(self):
+        path = '//span[@class="recipe-ingred_txt added"]/text()'
+        self.ings = self.tree.xpath(path)
 
     def martha(self):
         path = '//span[@class="component-text"]'
@@ -51,3 +53,7 @@ class Scraper(object):
         self.wprm()
         # Removes the cost which messes with parsing
         self.ings = [ing.rpartition(" ")[0] for ing in self.ings]
+
+    def damndelicious(self):
+        path = '//li[@itemprop="ingredients"]'
+        self.ings = [elt.text_content() for elt in self.tree.xpath(path)]
