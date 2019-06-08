@@ -42,7 +42,6 @@ class Recipe(object):
                 frac = tuple(float(x) for x in frac.split("/"))
                 frac = frac[0] / frac[1]
             return frac
-        
 
         def normalize(item):
             # T and t conflict, so we deal with them before 
@@ -63,9 +62,9 @@ class Recipe(object):
             # Splits ingredient so that amount, unit, and name are seperated
             split_amount = 1
             for char in ing:
-                if char.isalpha():
+                if not (char.isdigit() or char in " ./-"):
                     break
-                if char == " ":
+                if char in " -":
                     split_amount += 1
             ing = ing.split(" ", split_amount)
             if len(ing) < 3:
@@ -82,32 +81,33 @@ class Recipe(object):
             except ValueError:
                 if type(whole) == str and whole.isdigit():
                     ing[0] = float(whole)
-
-            self.ings[i].update({"amount": ing[0], "unit": normalize(ing[1]),
-                                "name": normalize(ing[2])})
+            
+            self.ings[i].update({"amount": float(ing[0]), "unit": 
+                                 normalize(ing[1]), "name": normalize(ing[2])})
 
     def convert_recipe(self):
 
+        # Opens spreadsheet of conversions
+        self.book.active = 0
+        sheet = self.book.active
+        known_ings = sheet["P"]
         # Maps ingredient unit to its column of the spreadsheet
         sheet_cols = {
             # 'oz' : 'X', 'teaspoons' : 'U', 'tablespoons' : 'V', "lb.": "AD", 
             "cups": "Y"
         }
+
         # Tries to convert each ingredient in ings
         for _, ing in enumerate(self.ings):
             if not (ing["selected"] and ing["unit"] in sheet_cols.keys()):
                continue
-            
-            # Opens spreadsheet of conversions
-            self.book.active = 0
-            sheet = self.book.active
-            known_ings = sheet["P"]
             # Iterates through sheet looking for given ingredient
-            for cell in (cell for cell in known_ings if ing["name"] == cell.value): 
+            for cell in (cell for cell in 
+                         known_ings if ing["name"] == cell.value): 
                 # Converts the ingredient if it is found
                 ing_row = sheet_cols[ing["unit"]]
                 ratio = sheet[ing_row][cell.row - 1].value
-                ing["amount"] = round(float(ing["amount"]) * ratio)
+                ing["amount"] = round(ing["amount"] * ratio)
                 ing["unit"] = "grams"
                 ing["changed"] = True
 
@@ -125,7 +125,7 @@ class Recipe(object):
             decimal = number - whole
             frac = str(Fraction(decimal).limit_denominator())
             if len(frac) <= 4:
-                # .3333... --> 0 1/3 --> 1/3
+                # 0 1/3 --> 1/3
                 return str(whole) + " " + frac if whole > 0 else frac
 
             return round(number, 1)
@@ -137,20 +137,19 @@ class Recipe(object):
                 if numbered:
                     buffer.write(str(i + 1) + ") ")
                 if self.ings[i]["changed"]:
-                    fragments = [str(x) for x in list(ing.values())[3:]]
+                    fragments = tuple(ing.values())[3:]
                     buffer.write(clean_float(ing["amount"]) + " " 
-                                 + " ".join(fragments))
+                                 + " ".join([str(x) for x in fragments]))
                 else:
                     buffer.write(self.ings_original[i])
                 buffer.write("\n")
             return buffer.getvalue()
-
+        
     def multiply(self, multiplier):
-        for _, ing in enumerate(self.ings):
-            amount = ing["amount"]
-            if type(amount) == int or type(amount) == float:
-                ing["amount"] *= multiplier
-                ing["changed"] = True
+        for _, ing in enumerate(ing for ing in 
+                                self.ings if "amount" in ing.keys()):
+            ing["amount"] *= multiplier
+            ing["changed"] = True
 
     def select(self, *args):
         self.selected = [False] * len(self.ings)
