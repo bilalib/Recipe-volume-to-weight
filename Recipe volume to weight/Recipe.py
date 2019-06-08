@@ -3,14 +3,14 @@ import io
 from Scraper import Scraper
 from fractions import Fraction
 
+
 class Recipe(object):
 
     def __init__(self, ings):
-        self.ings = list(ings)
+        self.book = openpyxl.load_workbook("conversions.xlsx", data_only=True)
+        self.ings_original = tuple(ings)
+        self.ings = tuple({"changed": False, "selected": True} for ing in ings)
         self.parse_ing_list()
-        self.ings_old = tuple(ings)
-        self.ing_changed = [False] * len(self.ings)
-        self.selected = [False] * len(self.ings)
 
     # Scrapes the link, getting the list of ings
     @classmethod
@@ -42,8 +42,24 @@ class Recipe(object):
                 frac = tuple(float(x) for x in frac.split("/"))
                 frac = frac[0] / frac[1]
             return frac
+        
 
-        for i, ing in enumerate(self.ings):
+        def normalize(item):
+            # T and t conflict, so we deal with them before 
+            # converting everything to lowercase
+            case_matters = {"T": "tablespoons", "t": "teaspoons"}
+            if item in case_matters.keys():
+                return case_matters[item]
+            # Converts item to lowercase and tries to find it in spreadsheet
+            item = item.lower()
+            self.book.active = 1
+            sheet = self.book.active
+            for row in sheet.iter_rows(values_only=True):
+                if any(item == cell for cell in row):
+                    return row[0]
+            return item
+
+        for i, ing in enumerate(self.ings_original):
             # Splits ingredient so that amount, unit, and name are seperated
             split_amount = 1
             for char in ing:
@@ -52,6 +68,9 @@ class Recipe(object):
                 if char == " ":
                     split_amount += 1
             ing = ing.split(" ", split_amount)
+            if len(ing) < 3:
+                self.ings[i]["selected"] = False
+                continue
 
             # If first or second elts are fractions, converts them to float
             ing[:2] = [frac_to_float(x) for x in ing[:2]]
@@ -63,53 +82,34 @@ class Recipe(object):
             except ValueError:
                 if type(whole) == str and whole.isdigit():
                     ing[0] = float(whole)
-            self.ings[i] = ing
 
-        self.ings = tuple(self.ings)
+            self.ings[i].update({"amount": ing[0], "unit": normalize(ing[1]),
+                                "name": normalize(ing[2])})
 
     def convert_recipe(self):
-        book = openpyxl.load_workbook("conversions.xlsx", data_only=True)
-
-        def normalize(item):
-            # T and t conflict, so we deal with them before 
-            # converting everything to lowercase
-            case_matters = {"T": "tablespoons", "t": "teaspoons"}
-            if item in case_matters.keys():
-                return case_matters[item]
-            # Converts item to lowercase and tries to find it in spreadsheet
-            item = item.lower()
-            book.active = 1
-            sheet = book.active
-            for row in sheet.iter_rows(values_only=True):
-                if any(item == cell for cell in row):
-                    return row[0]
-            return item
 
         # Maps ingredient unit to its column of the spreadsheet
         sheet_cols = {
             # 'oz' : 'X', 'teaspoons' : 'U', 'tablespoons' : 'V', "lb.": "AD", 
             "cups": "Y"
         }
-        selection_empty = all(not x for x in self.selected)
         # Tries to convert each ingredient in ings
-        for i, ing in enumerate(self.ings):
-            unit = normalize(ing[1])
-            in_selection = selection_empty or self.selected[i]
-            if len(ing) < 3 or not in_selection or unit not in sheet_cols.keys():
+        for _, ing in enumerate(self.ings):
+            if not (ing["selected"] and ing["unit"] in sheet_cols.keys()):
                continue
             
             # Opens spreadsheet of conversions
-            book.active = 0
-            sheet = book.active
+            self.book.active = 0
+            sheet = self.book.active
             known_ings = sheet["P"]
-            ing_name = normalize(ing[2])
             # Iterates through sheet looking for given ingredient
-            for cell in (cell for cell in known_ings if ing_name == cell.value): 
+            for cell in (cell for cell in known_ings if ing["name"] == cell.value): 
                 # Converts the ingredient if it is found
-                amount = float(ing[0])
-                ratio = sheet[sheet_cols[unit]][cell.row - 1].value
-                ing[:2] = round(amount * ratio), "grams"
-                self.ing_changed[i] = True
+                ing_row = sheet_cols[ing["unit"]]
+                ratio = sheet[ing_row][cell.row - 1].value
+                ing["amount"] = round(float(ing["amount"]) * ratio)
+                ing["unit"] = "grams"
+                ing["changed"] = True
 
     # Outputs the ingredient list in a readable format
     def prettify(self, numbered=False):
@@ -136,22 +136,23 @@ class Recipe(object):
             for i, ing in enumerate(self.ings):
                 if numbered:
                     buffer.write(str(i + 1) + ") ")
-                if self.ing_changed[i]:
-                    buffer.write(clean_float(ing[0]) + " " 
-                                 + " ".join([str(x) for x in ing[1:]]))
+                if self.ings[i]["changed"]:
+                    fragments = [str(x) for x in list(ing.values())[3:]]
+                    buffer.write(clean_float(ing["amount"]) + " " 
+                                 + " ".join(fragments))
                 else:
-                    buffer.write(self.ings_old[i])
+                    buffer.write(self.ings_original[i])
                 buffer.write("\n")
             return buffer.getvalue()
 
     def multiply(self, multiplier):
-        for i, ing in enumerate(self.ings):
-            amount = ing[0]
+        for _, ing in enumerate(self.ings):
+            amount = ing["amount"]
             if type(amount) == int or type(amount) == float:
-                ing[0] *= multiplier
-                self.ing_changed[i] = True
+                ing["amount"] *= multiplier
+                ing["changed"] = True
 
     def select(self, *args):
         self.selected = [False] * len(self.ings)
         for _, ing_idx in enumerate(args):
-            self.selected[ing_idx - 1] = True
+            self.ings[ing_idx - 1]["selected"] = True
