@@ -1,6 +1,7 @@
 import openpyxl
 from Scraper import Scraper
 from fractions import Fraction
+import io
 
 
 class Recipe(object):
@@ -61,12 +62,19 @@ class Recipe(object):
             # Splits ingredient so that amount, unit, and name are seperated
             split_amount = 1
             for char in ing:
-                if not (char.isdigit() or char in " ./-"):
+                if not (char.isdigit() or char in " ./-") or split_amount == 3:
                     break
                 if char in " -":
                     split_amount += 1
             ing = ing.split(" ", split_amount)
-            if len(ing) < 3:
+            length = len(ing)
+            if length == 2:
+                try:
+                    amt = float(ing[0])
+                    self.ings[i].update({"amount": amt, "name": ing[1]})
+                except:
+                    pass
+            if length < 3:
                 self.ings[i]["selected"] = False
                 continue
 
@@ -135,7 +143,7 @@ class Recipe(object):
             for i, ing in enumerate(self.ings):
                 if numbered:
                     buffer.write(str(i + 1) + ") ")
-                if self.ings[i]["changed"]:
+                if ing["changed"]:
                     fragments = tuple(ing.values())[3:]
                     buffer.write(clean_float(ing["amount"]) + " " 
                                  + " ".join([str(x) for x in fragments]))
@@ -147,7 +155,11 @@ class Recipe(object):
     def multiply(self, multiplier):
         for _, ing in enumerate(ing for ing in 
                                 self.ings if "amount" in ing.keys()):
-            ing["amount"] *= multiplier
+            amount = ing["amount"]
+            if ing.get("unit", "") == "grams":
+                ing["amount"] = round(amount * multiplier)
+            else:
+                ing["amount"] = amount * multiplier
             ing["changed"] = True
 
     def select(self, *args):
