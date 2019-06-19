@@ -72,7 +72,7 @@ class Recipe(object):
                 try:
                     amt = float(ing[0])
                     self.ings[i].update({"amount": amt, "name": ing[1]})
-                except:
+                except ValueError:
                     pass
             if length < 3:
                 self.ings[i]["selected"] = False
@@ -132,13 +132,12 @@ class Recipe(object):
             decimal = number - whole
             frac = str(Fraction(decimal).limit_denominator())
             if len(frac) <= 4:
-                # 0 1/3 --> 1/3
-                return str(whole) + " " + frac if whole > 0 else frac
+                # 0 1/3 --> 1/3:
+                return str(whole) + " " + frac if whole else frac
 
             return round(number, 1)
 
         # Creates stringIO to write each ingredient. 
-        # Goes through the amount of each ingredient first.
         with io.StringIO() as buffer:
             for i, ing in enumerate(self.ings):
                 if numbered:
@@ -153,10 +152,9 @@ class Recipe(object):
             return buffer.getvalue()
         
     def multiply(self, multiplier):
-        for _, ing in enumerate(ing for ing in 
-                                self.ings if "amount" in ing.keys()):
+        for ing in (ing for ing in self.ings if "amount" in ing.keys()):
             amount = ing["amount"]
-            if ing.get("unit", "") == "grams":
+            if ing.get("unit") == "grams":
                 ing["amount"] = round(amount * multiplier)
             else:
                 ing["amount"] = amount * multiplier
